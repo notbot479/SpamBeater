@@ -3,11 +3,24 @@ from pyrogram.types import Message
 from pyrogram.client import Client
 import uvloop
 
+from dataclasses import dataclass
+from io import BytesIO
+from enum import Enum
 import traceback
 
 from normalization import normalize_text
 from logger import logger
 from config import *
+
+
+class FileClass(Enum):
+    PHOTO = 1
+    VIDEO = 2
+
+@dataclass
+class MediaFile:
+    fclass: FileClass
+    fid: str
 
 
 uvloop.install()
@@ -19,13 +32,27 @@ bot = Client(
 )
 
 
-def get_media_file_id(message: Message) -> str | None:
+async def get_file_bytes(file_id:str) ->  BytesIO | None:
+    try:
+        file_bytes = await bot.download_media(file_id, in_memory=True)
+        if isinstance(file_bytes, BytesIO): return file_bytes
+    except:
+        return None
+
+def get_media_file(message: Message) -> MediaFile | None:
     photo = message.photo
     video = message.video
     document = message.document
-    if photo: return photo.file_id
-    elif video: return video.file_id
-    elif document: return document.file_id
+    if photo: 
+        return MediaFile(fclass=FileClass.PHOTO, fid=photo.file_id)
+    elif video: 
+        return MediaFile(fclass=FileClass.VIDEO, fid=video.file_id)
+    if not(document): return
+    mime_head = document.mime_type.split('/')[0]
+    if mime_head == 'image':
+        return MediaFile(fclass=FileClass.PHOTO, fid=document.file_id)
+    elif mime_head == 'video': 
+        return MediaFile(fclass=FileClass.VIDEO, fid=document.file_id)
 
 def get_effective_text(message: Message) -> str | None:
     text = message.text or message.caption
@@ -45,17 +72,39 @@ async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
     logger.info(f"[Bot] Delete Message({message_id}) from Chat({chat_id})")
 
 
+async def processing_text(text:str, message: Message) -> None:
+    text = f'Text: {text}'
+    print(text)
+    chat_id = message.chat.id
+    await bot.send_message(chat_id=chat_id,text=text)
+
+
+async def processing_photo(file: BytesIO, message: Message) -> None:
+    text = f'Image: {file}'
+    print(text)
+    chat_id = message.chat.id
+    await bot.send_message(chat_id=chat_id,text=text)
+
+async def processing_video(file: BytesIO, message: Message) -> None:
+    text = f'Video: {file}'
+    print(text)
+    chat_id = message.chat.id
+    await bot.send_message(chat_id=chat_id,text=text)
+
+
 @bot.on_message()
 @bot.on_edited_message()
 async def processing_message(_: Client, message: Message) -> None:
     text = get_effective_normalized_text(message=message)
-    file_id = get_media_file_id(message=message)
-    if not(text or file_id): return
-    print(text, file_id)
-    chat_id = message.chat.id
-    message_id = message.id
-    if text != 'spam': return 
-    await bot_delete_post_message(chat_id, message_id)
+    media_file = get_media_file(message=message)
+    if text: await processing_text(text=text, message=message)
+    if not(media_file): return
+    file = await get_file_bytes(file_id=media_file.fid)
+    if not(file): return
+    if media_file.fclass == FileClass.PHOTO:
+        await processing_photo(file=file, message=message)
+    elif media_file.fclass == FileClass.VIDEO:
+        await processing_video(file=file, message=message)
 
 
 def main():
