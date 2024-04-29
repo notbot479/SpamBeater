@@ -3,24 +3,12 @@ from pyrogram.types import Message
 from pyrogram.client import Client
 import uvloop
 
-from dataclasses import dataclass
-from io import BytesIO
-from enum import Enum
 import traceback
 
-from normalization import normalize_text
 from logger import logger
+from normalization import *
+from bot_types import *
 from config import *
-
-
-class FileClass(Enum):
-    PHOTO = 1
-    VIDEO = 2
-
-@dataclass
-class MediaFile:
-    fclass: FileClass
-    fid: str
 
 
 uvloop.install()
@@ -32,10 +20,11 @@ bot = Client(
 )
 
 
-async def get_file_bytes(file_id:str) ->  BytesIO | None:
+async def get_file_bytes(file_id:str) -> bytes | None:
     try:
-        file_bytes = await bot.download_media(file_id, in_memory=True)
-        if isinstance(file_bytes, BytesIO): return file_bytes
+        file = await bot.download_media(file_id, in_memory=True)
+        file_bytes = bytes(file.getbuffer()) #pyright: ignore
+        return file_bytes
     except:
         return None
 
@@ -61,7 +50,7 @@ def get_effective_text(message: Message) -> str | None:
 def get_effective_normalized_text(message: Message) -> str | None:
     text = get_effective_text(message=message)
     if not(text): return None
-    text = normalize_text(text=text)
+    text = text.replace('\n',' ').lower()
     return text
 
 async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
@@ -77,13 +66,14 @@ async def processing_text(text:str) -> bool:
     print(text)
     return False
 
-async def processing_photo(file: BytesIO) -> bool:
-    text = f'Image: {file}'
+async def processing_photo(file_bytes: bytes) -> bool:
+    image = normalize_image(image_bytes=file_bytes)
+    text = f'Image: {image.shape}'
     print(text)
     return False
 
-async def processing_video(file: BytesIO) -> bool:
-    text = f'Video: {file}'
+async def processing_video(file_bytes: bytes) -> bool:
+    text = f'Video {len(file_bytes)}'
     print(text)
     return False
 
@@ -105,12 +95,12 @@ async def processing_message(_: Client, message: Message) -> None:
     if text: spam = await processing_text(text=text)
     if spam: await processing_spam_message(message=message)
     if not(media_file) or spam: return
-    file = await get_file_bytes(file_id=media_file.fid)
-    if not(file): return
+    file_bytes = await get_file_bytes(file_id=media_file.fid)
+    if not(file_bytes): return
     if media_file.fclass == FileClass.PHOTO:
-        spam = await processing_photo(file=file)
+        spam = await processing_photo(file_bytes=file_bytes)
     elif media_file.fclass == FileClass.VIDEO:
-        spam = await processing_video(file=file)
+        spam = await processing_video(file_bytes=file_bytes)
     if spam: await processing_spam_message(message=message)
 
 
