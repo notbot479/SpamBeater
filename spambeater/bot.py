@@ -69,42 +69,49 @@ async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
     messages = await bot.get_media_group(chat_id=chat_id, message_id=message_id)
     message_ids = [m.id for m in messages]
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
-    logger.info(f"[Bot] Delete Message({message_id}) from Chat({chat_id})")
+    logger.debug(f"[Bot] Delete Message({message_id}) from Chat({chat_id})")
 
 
-async def processing_text(text:str, message: Message) -> None:
+async def processing_text(text:str) -> bool:
     text = f'Text: {text}'
     print(text)
-    chat_id = message.chat.id
-    await bot.send_message(chat_id=chat_id,text=text)
+    return False
 
-
-async def processing_photo(file: BytesIO, message: Message) -> None:
+async def processing_photo(file: BytesIO) -> bool:
     text = f'Image: {file}'
     print(text)
-    chat_id = message.chat.id
-    await bot.send_message(chat_id=chat_id,text=text)
+    return False
 
-async def processing_video(file: BytesIO, message: Message) -> None:
+async def processing_video(file: BytesIO) -> bool:
     text = f'Video: {file}'
     print(text)
+    return False
+
+async def processing_spam_message(message: Message) -> None:
+    user_id = message.from_user.id
     chat_id = message.chat.id
-    await bot.send_message(chat_id=chat_id,text=text)
+    message_id = message.id
+    await bot_delete_post_message(chat_id=chat_id, message_id=message_id)
+    msg = f"[Bot] Delete Message({message_id}) from User({user_id}) in Chat({chat_id})"
+    logger.info(msg=msg)
 
 
 @bot.on_message()
 @bot.on_edited_message()
 async def processing_message(_: Client, message: Message) -> None:
+    spam = False
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
-    if text: await processing_text(text=text, message=message)
-    if not(media_file): return
+    if text: spam = await processing_text(text=text)
+    if spam: await processing_spam_message(message=message)
+    if not(media_file) or spam: return
     file = await get_file_bytes(file_id=media_file.fid)
     if not(file): return
     if media_file.fclass == FileClass.PHOTO:
-        await processing_photo(file=file, message=message)
+        spam = await processing_photo(file=file)
     elif media_file.fclass == FileClass.VIDEO:
-        await processing_video(file=file, message=message)
+        spam = await processing_video(file=file)
+    if spam: await processing_spam_message(message=message)
 
 
 def main():
