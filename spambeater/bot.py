@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from pyrogram.types import Message
+from pyrogram.types import CallbackQuery, Message
 from pyrogram.client import Client
 import uvloop
 
@@ -9,6 +9,7 @@ import imageio
 from logger import logger
 from normalization import *
 from bot_types import *
+from keyboards import *
 from config import *
 
 
@@ -20,6 +21,46 @@ bot = Client(
     bot_token=BOT_TELEGRAM_BOT_TOKEN,
 )
 
+
+async def admin_mark_message_as_spam(message: Message, delete: bool = False) -> None:
+    chat_id = message.chat.id
+    message_ids = [message.id,]
+    print('Processing spam')
+    # delete message after processing
+    if not(delete): return
+    await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
+
+async def admin_mark_message_as_ham(message: Message, delete: bool = False) -> None:
+    chat_id = message.chat.id
+    message_ids = [message.id,]
+    print('Processing ham')
+    # delete message after processing
+    if not(delete): return
+    await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
+
+async def bot_ask4spam_in_admin_chat(message: Message) -> None:
+    keyboard = ASK_FOR_SPAM_KEYBOARD
+    params = {
+        'reply_markup': keyboard,
+    }
+    await bot_copy_message_to_admin_chat(message=message, **params)
+
+def get_admin_chat(chat_id:int) -> int | None:
+    admin_chat_id = BOT_ADMIN_CHATS.get(chat_id)
+    return admin_chat_id
+
+async def bot_copy_message_to_admin_chat(message: Message, **kwargs) -> None:
+    message_id = message.id
+    from_chat_id = message.chat.id
+    if from_chat_id > 0: return # skip personal chats
+    chat_id = get_admin_chat(chat_id=from_chat_id)
+    if not(chat_id): return
+    await bot.copy_message(
+        chat_id=chat_id,
+        message_id=message_id,
+        from_chat_id=from_chat_id,
+        **kwargs,
+    )
 
 def get_main_frames_from_video(video: bytes, num_frames=30) -> list[np.ndarray]:
     frames = get_frames_from_video(video=video)
@@ -103,12 +144,24 @@ async def processing_spam_message(message: Message) -> None:
     logger.info(msg=msg)
 
 
+@bot.on_callback_query()
+async def callback_query(_: Client, query: CallbackQuery):
+    message = query.message
+    if query.data == "spam":
+        await admin_mark_message_as_spam(message=message, delete=True)
+    elif query.data == "notspam":
+        await admin_mark_message_as_ham(message=message, delete=True)
+
 @bot.on_message()
 @bot.on_edited_message()
 async def processing_message(_: Client, message: Message) -> None:
     spam = False
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
+    
+    # TODO remove test echo to admin chat
+    await bot_ask4spam_in_admin_chat(message=message)
+
     if text: spam = await processing_text(text=text)
     if spam: await processing_spam_message(message=message)
     if not(media_file) or spam: return
@@ -119,8 +172,8 @@ async def processing_message(_: Client, message: Message) -> None:
     elif media_file.fclass == FileClass.VIDEO:
         spam = await processing_video(file_bytes=file_bytes)
     if spam: await processing_spam_message(message=message)
-
-
+    
+   
 def main():
     try:
         mode = 'debug' if BOT_DEBUG_MODE else 'deploy'
