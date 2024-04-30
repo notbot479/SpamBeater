@@ -21,6 +21,15 @@ bot = Client(
 )
 
 
+def get_main_frames_from_video(video: bytes, num_frames=30) -> list[np.ndarray]:
+    frames = get_frames_from_video(video=video)
+    if not(frames): return []
+    total_frames = len(frames)
+    if total_frames < num_frames: return frames
+    frame_delta = total_frames // num_frames
+    main_frames = [frames[i] for i in range(0, total_frames, frame_delta)]
+    return main_frames[0:num_frames]
+
 def get_frames_from_video(video:bytes) -> list[np.ndarray]:
     frames = imageio.get_reader(video, format='mp4') #pyright: ignore
     frames = [np.array(i) for i in frames] # pyright: ignore
@@ -79,8 +88,7 @@ async def processing_photo(file_bytes: bytes) -> bool:
     return False
 
 async def processing_video(file_bytes: bytes) -> bool:
-    frames = get_frames_from_video(video=file_bytes)
-
+    frames = get_main_frames_from_video(video=file_bytes)
     text = f'Video frames {len(frames)}'
     print(text)
     return False
