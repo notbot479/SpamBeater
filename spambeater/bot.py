@@ -82,13 +82,14 @@ async def processing_text(text:str) -> bool:
     return False
 
 async def processing_photo(file_bytes: bytes) -> bool:
-    image = normalize_image(image_bytes=file_bytes)
+    image = normalize_image(file_bytes)
     text = f'Image: {image.shape}'
     print(text)
     return False
 
 async def processing_video(file_bytes: bytes) -> bool:
     frames = get_main_frames_from_video(video=file_bytes)
+    images = [normalize_image(i) for i in frames]
     text = f'Video frames {len(frames)}'
     print(text)
     return False
