@@ -4,6 +4,7 @@ from pyrogram.client import Client
 import uvloop
 
 import traceback
+import imageio
 
 from logger import logger
 from normalization import *
@@ -19,6 +20,11 @@ bot = Client(
     bot_token=BOT_TELEGRAM_BOT_TOKEN,
 )
 
+
+def get_frames_from_video(video:bytes) -> list[np.ndarray]:
+    frames = imageio.get_reader(video, format='mp4') #pyright: ignore
+    frames = [np.array(i) for i in frames] # pyright: ignore
+    return frames
 
 async def get_file_bytes(file_id:str) -> bytes | None:
     try:
@@ -73,7 +79,9 @@ async def processing_photo(file_bytes: bytes) -> bool:
     return False
 
 async def processing_video(file_bytes: bytes) -> bool:
-    text = f'Video {len(file_bytes)}'
+    frames = get_frames_from_video(video=file_bytes)
+
+    text = f'Video frames {len(frames)}'
     print(text)
     return False
 
