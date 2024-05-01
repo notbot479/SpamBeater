@@ -3,9 +3,9 @@ from pyrogram.types import CallbackQuery, Message
 from pyrogram.client import Client
 import uvloop
 
+import imageio.v3 as iio
 import numpy as np
 import traceback
-import imageio
 
 from normalization.image import normalize_image
 from antispam.image import ImagePredictModel
@@ -91,8 +91,8 @@ def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
     main_frames = [frames[i] for i in range(0, total_frames, frame_delta)]
     return main_frames[0:num_frames]
 
-def get_frames_from_video(video:bytes, format:str='mp4') -> list[np.ndarray]:
-    return [i for i in imageio.get_reader(video, format=format)] # pyright:ignore
+def get_frames_from_video(video:bytes) -> list[np.ndarray]:
+    return list(iio.imread(video, plugin="pyav"))
 
 async def get_file_bytes(file_id:str) -> bytes | None:
     try:
