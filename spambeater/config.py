@@ -16,7 +16,10 @@ class LoggerMode:
 # basic settings
 BOT_NAME = "SpamBeater"
 BOT_DEBUG_MODE = True
-BOT_ADMIN_CHATS = {-1002065132265: -4176344070}
+BOT_ADMIN_CHATS = {
+    959040994: 959040994, # test chat
+    -1002065132265: -4176344070,
+}
 
 # dotenv
 BOT_TELEGRAM_BOT_TOKEN: str = os.getenv("BOT_TELEGRAM_BOT_TOKEN","")

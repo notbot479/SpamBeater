@@ -8,7 +8,7 @@ import traceback
 import imageio
 
 from normalization.image import normalize_image
-from normalization.text import normalize_text
+from antispam.text import TextPredictModel
 from logger import logger
 from bot_types import *
 from keyboards import *
@@ -22,7 +22,20 @@ bot = Client(
     api_hash=BOT_TELEGRAM_API_HASH,
     bot_token=BOT_TELEGRAM_BOT_TOKEN,
 )
+text_predict_model = TextPredictModel()
 
+
+async def is_chat_admin(user_id:int, chat_id:int) -> bool:
+    try:
+        chat_member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        status = chat_member.status in ("administrator","creator")
+        return status
+    except:
+        return False
+
+def is_chat_for_processing(chat_id:int) -> bool:
+    chats = list(BOT_ADMIN_CHATS.keys())
+    return chat_id in chats
 
 async def admin_mark_message_as_spam(message: Message, delete: bool = False) -> None:
     chat_id = message.chat.id
@@ -54,7 +67,6 @@ def get_admin_chat(chat_id:int) -> int | None:
 async def bot_copy_message_to_admin_chat(message: Message, **kwargs) -> None:
     message_id = message.id
     from_chat_id = message.chat.id
-    if from_chat_id > 0: return # skip personal chats
     chat_id = get_admin_chat(chat_id=from_chat_id)
     if not(chat_id): return
     await bot.copy_message(
@@ -113,18 +125,20 @@ def get_effective_normalized_text(message: Message) -> str | None:
 
 async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
     '''delete all messages from group by message id'''
-    messages = await bot.get_media_group(chat_id=chat_id, message_id=message_id)
-    message_ids = [m.id for m in messages]
+    try:
+        messages = await bot.get_media_group(chat_id=chat_id, message_id=message_id)
+        message_ids = [m.id for m in messages]
+    except:
+        message_ids = [message_id,]
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
-    logger.debug(f"[Bot] Delete Message({message_id}) from Chat({chat_id})")
 
 
-async def processing_text(text:str) -> bool:
-    normalized_text = normalize_text(text=text)
-    if not(normalized_text): return False
-    print(f'Text: {text}')
-    print(f'Text normalized: {normalized_text}')
-    return False
+async def processing_text(text:str, spam_proba:float=0.5) -> bool:
+    if not(text): return False
+    proba = text_predict_model.predict_spam_proba(text=text)
+    print(f"Text({text}) predicted spam proba: {proba}")
+    spam = proba > spam_proba
+    return spam
 
 async def processing_photo(file_bytes: bytes) -> bool:
     image = normalize_image(file_bytes)
@@ -143,6 +157,7 @@ async def processing_spam_message(message: Message) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
     message_id = message.id
+    await bot_ask4spam_in_admin_chat(message=message)
     await bot_delete_post_message(chat_id=chat_id, message_id=message_id)
     msg = f"[Bot] Delete Message({message_id}) from User({user_id}) in Chat({chat_id})"
     logger.info(msg=msg)
@@ -159,13 +174,15 @@ async def callback_query(_: Client, query: CallbackQuery):
 @bot.on_message()
 @bot.on_edited_message()
 async def processing_message(_: Client, message: Message) -> None:
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    # skip processing
+    if await is_chat_admin(user_id=user_id,chat_id=chat_id): return
+    if not(is_chat_for_processing(chat_id)): return
+    # processing message
     spam = False
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
-    
-    # TODO remove test echo to admin chat
-    await bot_ask4spam_in_admin_chat(message=message)
-
     if text: spam = await processing_text(text=text)
     if spam: await processing_spam_message(message=message)
     if not(media_file) or spam: return
