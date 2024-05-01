@@ -107,7 +107,11 @@ def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
     return main_frames[0:num_frames]
 
 def get_frames_from_video(video:bytes) -> list[np.ndarray]:
-    return list(iio.imread(video, plugin="pyav"))
+    try:
+        return list(iio.imread(video, plugin="pyav"))
+    except Exception as e:
+        logger.critical(e)
+        return []
 
 async def get_file_bytes(file_id:str) -> bytes | None:
     try:
@@ -173,7 +177,7 @@ async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
 async def processing_text(text:str, spam_proba:float=0.5) -> bool:
     if not(text): return False
     proba = text_predict_model.predict_spam_proba(text=text)
-    print(f"Text({text}) predicted spam proba: {proba}")
+    logger.debug(f"Text({text}) predicted spam proba: {proba}")
     spam = proba > spam_proba
     return spam
 
@@ -182,16 +186,18 @@ async def processing_photo(file_bytes: bytes) -> bool:
     image = normalize_image(file_bytes)
     spam = _processing_images(images=[image,])
     spam = spam[0] if spam else False
-    print(f'Image: {image.shape}, spam: {spam}') #TODO remove
+    logger.debug(f'Image shape: {image.shape}, spam: {spam}') 
     return spam
 
 async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
     logger.debug(f'Start processing video')
     images = [normalize_image(i) for i in get_main_frames_from_video(video=file_bytes)]
+    if not(images): return False
     spam_images = [image for i,image in zip(_processing_images(images),images) if i]
     spam_images_count = len(spam_images)
     spam = spam_images_count > len(images) * spam_proba
-    print(f'Video frames {len(images)}, spam_count: {spam_images_count}, spam: {spam}') #TODO remove
+    msg = f'Video frames: {len(images)}, spam_count: {spam_images_count}, spam: {spam}'
+    logger.debug(msg=msg)
     return spam
 
 async def processing_spam_message(message: Message) -> None:
@@ -222,6 +228,7 @@ async def callback_query(_: Client, query: CallbackQuery) -> None:
 async def processing_message(_: Client, message: Message) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
+    print()
     logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
     # skip processing
     if not(is_chat_for_processing(chat_id)): return

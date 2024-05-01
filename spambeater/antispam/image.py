@@ -7,7 +7,7 @@ from logger import logger
 
 
 class ImagePredictModel(PredictModelBase):
-    _class_names = ['meat','notspam']
+    _class_names = ['ads','meat','notspam']
     _notspam_class_name = 'notspam'
 
     def _get_class_name(self, inx:int) -> str:
