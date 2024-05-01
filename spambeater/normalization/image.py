@@ -14,7 +14,7 @@ def normalize_image(
     img = _crop_center_square(img=img)
     img = img.resize(target_size)
     if show: img.show()
-    image_array = np.array(img).astype(np.float32) / 225.0
+    image_array = np.array(img).astype(np.float32) / 255.0
     return image_array
 
 

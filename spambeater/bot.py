@@ -28,8 +28,8 @@ image_predict_model = ImagePredictModel()
 
 
 def _processing_image(image: np.ndarray) -> bool:
-    qs = image_predict_model.predict_spam(image=image)
-    return False #TODO
+    spam = image_predict_model.predict_spam(image=image)
+    return spam
 
 async def is_chat_admin(user_id:int, chat_id:int) -> bool:
     try:
@@ -152,12 +152,12 @@ async def processing_photo(file_bytes: bytes) -> bool:
     print(f'Image: {image.shape}, spam: {spam}')
     return spam
 
-async def processing_video(file_bytes: bytes) -> bool:
+async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
     frames = get_main_frames_from_video(video=file_bytes)
     images = [normalize_image(i) for i in frames]
-    spam_images = [j for j in [(_processing_image(i),i) for i in images] if j]
+    spam_images = [j[1] for j in [(_processing_image(i),i) for i in images] if j[0]]
     spam_images_count = len(spam_images)
-    spam = len(spam_images) > 0
+    spam = spam_images_count > len(images) * spam_proba
     print(f'Video frames {len(frames)}, spam_count: {spam_images_count}')
     return spam
 

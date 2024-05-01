@@ -9,6 +9,20 @@ from .predict_model import PredictModelBase
 
 
 class ImagePredictModel(PredictModelBase):
+    _class_names = ['meat','notspam']
+    _notspam_class_name = 'notspam'
+
+    def _get_class_name(self, inx:int) -> str | None:
+        try:
+            name = self._class_names[inx]
+            return name
+        except:
+            return None
+
+    def is_spam_class(self, name: str) -> bool:
+        status = not(name == self._notspam_class_name)
+        return status
+
     def __init__(self, model_dir: str | None = None) -> None:
         self._model_dir = self._get_model_dir(model_dir)
         self._model_path = os.path.join(self._model_dir,'model.keras') 
@@ -19,8 +33,12 @@ class ImagePredictModel(PredictModelBase):
         if not(self.model): return False
         X = tf.expand_dims(image, axis=0)
         y = self.model.predict(X, verbose=0)[0] #pyright: ignore
-        print(y)
-        return False #TODO
+        inx = int(np.argmax(y))
+        class_name = self._get_class_name(inx=inx)
+        print(class_name, y)
+        if not(class_name): return False
+        spam = self.is_spam_class(name = class_name)
+        return spam
     
     def predict_spam_proba(self, image: np.ndarray) -> float: 
         spam = self.predict_spam(image=image)
