@@ -145,18 +145,20 @@ async def processing_text(text:str, spam_proba:float=0.5) -> bool:
     return spam
 
 async def processing_photo(file_bytes: bytes) -> bool:
+    logger.debug(f'Start processing photo')
     image = normalize_image(file_bytes)
     spam = _processing_images(images=[image,])
     spam = spam[0] if spam else False
-    print(f'Image: {image.shape}, spam: {spam}')
+    print(f'Image: {image.shape}, spam: {spam}') #TODO remove
     return spam
 
 async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
+    logger.debug(f'Start processing video')
     images = [normalize_image(i) for i in get_main_frames_from_video(video=file_bytes)]
     spam_images = [image for i,image in zip(_processing_images(images),images) if i]
     spam_images_count = len(spam_images)
     spam = spam_images_count > len(images) * spam_proba
-    print(f'Video frames {len(images)}, spam_count: {spam_images_count}, spam: {spam}')
+    print(f'Video frames {len(images)}, spam_count: {spam_images_count}, spam: {spam}') #TODO remove
     return spam
 
 async def processing_spam_message(message: Message) -> None:
