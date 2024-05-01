@@ -172,12 +172,17 @@ async def processing_spam_message(message: Message) -> None:
 
 
 @bot.on_callback_query()
-async def callback_query(_: Client, query: CallbackQuery):
+async def callback_query(_: Client, query: CallbackQuery) -> None:
     message = query.message
     if query.data == "spam":
         await admin_mark_message_as_spam(message=message, delete=True)
-    elif query.data == "notspam":
+    elif query.data == "ham":
         await admin_mark_message_as_ham(message=message, delete=True)
+    elif query.data == "ignore":
+        await bot.delete_messages(
+            chat_id = message.chat.id,
+            message_ids=[message.id,],
+        )
 
 @bot.on_message()
 @bot.on_edited_message()
