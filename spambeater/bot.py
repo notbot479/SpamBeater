@@ -3,11 +3,13 @@ from pyrogram.types import CallbackQuery, Message
 from pyrogram.client import Client
 import uvloop
 
+import numpy as np
 import traceback
 import imageio
 
+from normalization.image import normalize_image
+from normalization.text import normalize_text
 from logger import logger
-from normalization import *
 from bot_types import *
 from keyboards import *
 from config import *
@@ -118,8 +120,10 @@ async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
 
 
 async def processing_text(text:str) -> bool:
-    text = f'Text: {text}'
-    print(text)
+    normalized_text = normalize_text(text=text)
+    if not(normalized_text): return False
+    print(f'Text: {text}')
+    print(f'Text normalized: {normalized_text}')
     return False
 
 async def processing_photo(file_bytes: bytes) -> bool:
