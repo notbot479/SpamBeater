@@ -8,6 +8,7 @@ import traceback
 import imageio
 
 from normalization.image import normalize_image
+from antispam.image import ImagePredictModel
 from antispam.text import TextPredictModel
 from logger import logger
 from bot_types import *
@@ -23,7 +24,12 @@ bot = Client(
     bot_token=BOT_TELEGRAM_BOT_TOKEN,
 )
 text_predict_model = TextPredictModel()
+image_predict_model = ImagePredictModel()
 
+
+def _processing_image(image: np.ndarray) -> bool:
+    qs = image_predict_model.predict_spam(image=image)
+    return False #TODO
 
 async def is_chat_admin(user_id:int, chat_id:int) -> bool:
     try:
@@ -142,16 +148,18 @@ async def processing_text(text:str, spam_proba:float=0.5) -> bool:
 
 async def processing_photo(file_bytes: bytes) -> bool:
     image = normalize_image(file_bytes)
-    text = f'Image: {image.shape}'
-    print(text)
-    return False
+    spam = _processing_image(image=image)
+    print(f'Image: {image.shape}, spam: {spam}')
+    return spam
 
 async def processing_video(file_bytes: bytes) -> bool:
     frames = get_main_frames_from_video(video=file_bytes)
     images = [normalize_image(i) for i in frames]
-    text = f'Video frames {len(frames)}'
-    print(text)
-    return False
+    spam_images = [j for j in [(_processing_image(i),i) for i in images] if j]
+    spam_images_count = len(spam_images)
+    spam = len(spam_images) > 0
+    print(f'Video frames {len(frames)}, spam_count: {spam_images_count}')
+    return spam
 
 async def processing_spam_message(message: Message) -> None:
     user_id = message.from_user.id

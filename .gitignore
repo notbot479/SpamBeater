@@ -2,5 +2,6 @@
 **/*.session
 **/*.session-journal
 **/*.joblib
+**/*.keras
 **/*.log
 **/*.env
