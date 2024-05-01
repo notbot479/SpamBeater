@@ -1,7 +1,11 @@
 **/*__pycache__/
-**/*.session
 **/*.session-journal
+**/*.session
 **/*.joblib
 **/*.keras
 **/*.log
 **/*.env
+
+**/spam/*
+**/ham/*
+**/*.csv

@@ -7,6 +7,7 @@ import imageio.v3 as iio
 import numpy as np
 import traceback
 
+from db.manager import Category, SaveManager
 from normalization.image import normalize_image
 from antispam.image import ImagePredictModel
 from antispam.text import TextPredictModel
@@ -27,6 +28,20 @@ text_predict_model = TextPredictModel()
 image_predict_model = ImagePredictModel()
 
 
+async def save_message_data(message: Message, category: Category) -> None:
+    logger.debug(f'Processing save message data, category: {category}')
+    text = get_effective_normalized_text(message=message)
+    media_file = get_media_file(message=message)
+    # save text and media
+    if text: SaveManager.save_text(text=text, category=category)
+    if not(media_file): return
+    filename = f'{media_file.fid}.{media_file.ext}'
+    path = SaveManager.get_save_media_path(filename=filename,category=category)
+    if not(path): return
+    file_bytes = await get_file_bytes(file_id=media_file.fid)
+    if not(file_bytes): return 
+    with open(path, 'wb') as file: file.write(file_bytes)
+
 def _processing_images(images: list[np.ndarray]) -> list[bool]:
     spam = image_predict_model.predict_spam(images=images)
     return spam
@@ -46,7 +61,7 @@ def is_chat_for_processing(chat_id:int) -> bool:
 async def admin_mark_message_as_spam(message: Message, delete: bool = False) -> None:
     chat_id = message.chat.id
     message_ids = [message.id,]
-    print('Processing spam')
+    await save_message_data(message=message, category='spam')
     # delete message after processing
     if not(delete): return
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
@@ -54,7 +69,7 @@ async def admin_mark_message_as_spam(message: Message, delete: bool = False) -> 
 async def admin_mark_message_as_ham(message: Message, delete: bool = False) -> None:
     chat_id = message.chat.id
     message_ids = [message.id,]
-    print('Processing ham')
+    await save_message_data(message=message, category='ham')
     # delete message after processing
     if not(delete): return
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
@@ -97,8 +112,7 @@ def get_frames_from_video(video:bytes) -> list[np.ndarray]:
 async def get_file_bytes(file_id:str) -> bytes | None:
     try:
         file = await bot.download_media(file_id, in_memory=True)
-        file_bytes = bytes(file.getbuffer()) #pyright: ignore
-        return file_bytes
+        return bytes(file.getbuffer()) #pyright: ignore
     except:
         return None
 
@@ -107,15 +121,34 @@ def get_media_file(message: Message) -> MediaFile | None:
     video = message.video
     document = message.document
     if photo: 
-        return MediaFile(fclass=FileClass.PHOTO, fid=photo.file_id)
+        media = MediaFile(
+            fclass=FileClass.PHOTO, 
+            fid=photo.file_id,
+            ext='jpg',
+        )
+        return media
     elif video: 
-        return MediaFile(fclass=FileClass.VIDEO, fid=video.file_id)
+        media = MediaFile(
+            fclass=FileClass.VIDEO, 
+            fid=video.file_id,
+            ext='mp4',
+        )
+        return media
     if not(document): return
-    mime_head = document.mime_type.split('/')[0]
+    mime_head, ext = document.mime_type.split('/')[0:2]
     if mime_head == 'image':
-        return MediaFile(fclass=FileClass.PHOTO, fid=document.file_id)
+        media = MediaFile(
+            fclass=FileClass.PHOTO, 
+            fid=document.file_id,
+            ext=ext,
+        )
     elif mime_head == 'video': 
-        return MediaFile(fclass=FileClass.VIDEO, fid=document.file_id)
+        media = MediaFile(
+            fclass=FileClass.VIDEO, 
+            fid=document.file_id,
+            ext=ext,
+        )
+        return media
 
 def get_effective_text(message: Message) -> str | None:
     text = message.text or message.caption

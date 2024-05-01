@@ -10,3 +10,4 @@ class FileClass(Enum):
 class MediaFile:
     fclass: FileClass
     fid: str
+    ext: str
