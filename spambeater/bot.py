@@ -27,8 +27,8 @@ text_predict_model = TextPredictModel()
 image_predict_model = ImagePredictModel()
 
 
-def _processing_image(image: np.ndarray) -> bool:
-    spam = image_predict_model.predict_spam(image=image)
+def _processing_images(images: list[np.ndarray]) -> list[bool]:
+    spam = image_predict_model.predict_spam(images=images)
     return spam
 
 async def is_chat_admin(user_id:int, chat_id:int) -> bool:
@@ -82,7 +82,7 @@ async def bot_copy_message_to_admin_chat(message: Message, **kwargs) -> None:
         **kwargs,
     )
 
-def get_main_frames_from_video(video: bytes, num_frames=30) -> list[np.ndarray]:
+def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
     frames = get_frames_from_video(video=video)
     if not(frames): return []
     total_frames = len(frames)
@@ -91,10 +91,8 @@ def get_main_frames_from_video(video: bytes, num_frames=30) -> list[np.ndarray]:
     main_frames = [frames[i] for i in range(0, total_frames, frame_delta)]
     return main_frames[0:num_frames]
 
-def get_frames_from_video(video:bytes) -> list[np.ndarray]:
-    frames = imageio.get_reader(video, format='mp4') #pyright: ignore
-    frames = [np.array(i) for i in frames] # pyright: ignore
-    return frames
+def get_frames_from_video(video:bytes, format:str='mp4') -> list[np.ndarray]:
+    return [i for i in imageio.get_reader(video, format=format)] # pyright:ignore
 
 async def get_file_bytes(file_id:str) -> bytes | None:
     try:
@@ -148,17 +146,17 @@ async def processing_text(text:str, spam_proba:float=0.5) -> bool:
 
 async def processing_photo(file_bytes: bytes) -> bool:
     image = normalize_image(file_bytes)
-    spam = _processing_image(image=image)
+    spam = _processing_images(images=[image,])
+    spam = spam[0] if spam else False
     print(f'Image: {image.shape}, spam: {spam}')
     return spam
 
 async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
-    frames = get_main_frames_from_video(video=file_bytes)
-    images = [normalize_image(i) for i in frames]
-    spam_images = [j[1] for j in [(_processing_image(i),i) for i in images] if j[0]]
+    images = [normalize_image(i) for i in get_main_frames_from_video(video=file_bytes)]
+    spam_images = [image for i,image in zip(_processing_images(images),images) if i]
     spam_images_count = len(spam_images)
     spam = spam_images_count > len(images) * spam_proba
-    print(f'Video frames {len(frames)}, spam_count: {spam_images_count}')
+    print(f'Video frames {len(images)}, spam_count: {spam_images_count}, spam: {spam}')
     return spam
 
 async def processing_spam_message(message: Message) -> None:
@@ -184,8 +182,8 @@ async def callback_query(_: Client, query: CallbackQuery):
 async def processing_message(_: Client, message: Message) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
+    logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
     # skip processing
-    if await is_chat_admin(user_id=user_id,chat_id=chat_id): return
     if not(is_chat_for_processing(chat_id)): return
     # processing message
     spam = False
