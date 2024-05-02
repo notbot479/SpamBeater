@@ -5,17 +5,18 @@ import uvloop
 
 import numpy as np
 import traceback
+import aiofiles
 import asyncio
 
-from tasks import get_frames_count, get_frames_from_video
-from db.manager import Category, SaveManager
 from normalization.image import normalize_image
+from db.manager import Category, SaveManager
 from antispam.image import ImagePredictModel
 from antispam.text import TextPredictModel
 from logger import logger
 from bot_types import *
 from keyboards import *
 from config import *
+import tasks
 
 
 uvloop.install()
@@ -40,7 +41,8 @@ async def save_message_data(message: Message, category: Category) -> None:
     path = SaveManager.get_save_media_path(filename=filename,category=category)
     if not(path): return
     file_bytes = await get_file_bytes(file_id=media_file.fid)
-    if not(file_bytes): return 
+    async with aiofiles.open(path, 'wb') as file: await file.write(file_bytes)
+
     with open(path, 'wb') as file: file.write(file_bytes)
 
 def _processing_images(images: list[np.ndarray]) -> list[bool]:
@@ -99,13 +101,13 @@ async def bot_copy_message_to_admin_chat(message: Message, **kwargs) -> None:
     )
 
 async def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
-    job = get_frames_count.delay(video=video)
+    job = tasks.get_frames_count.delay(video=video)
     while not job.ready(): await asyncio.sleep(1)
     total_frames = job.get()
     if total_frames < num_frames: total_frames = num_frames
     if not(total_frames): return []
     step = total_frames // num_frames
-    job = get_frames_from_video.delay(video=video, stop=total_frames, step=step)
+    job = tasks.get_frames_from_video.delay(video=video, stop=total_frames, step=step)
     while not job.ready(): await asyncio.sleep(1)
     frames = job.get()
     return frames[0:num_frames]

@@ -24,6 +24,7 @@ keras = "3.3.3"
 tensorflow = "^2.16.1"
 celery = "^5.4.0"
 redis = "^5.0.4"
+aiofiles = "^23.2.1"
 
 [build-system]
 requires = ["poetry-core"]
