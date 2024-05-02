@@ -3,10 +3,11 @@ from pyrogram.types import CallbackQuery, Message
 from pyrogram.client import Client
 import uvloop
 
-import imageio.v2 as iio
 import numpy as np
 import traceback
+import asyncio
 
+from tasks import get_frames_count, get_frames_from_video
 from db.manager import Category, SaveManager
 from normalization.image import normalize_image
 from antispam.image import ImagePredictModel
@@ -97,23 +98,16 @@ async def bot_copy_message_to_admin_chat(message: Message, **kwargs) -> None:
         **kwargs,
     )
 
-def get_video_reader(video:bytes):
-    return iio.get_reader(video, format='mp4') #pyright: ignore
-
-def get_frames_count(video:bytes) -> int:
-    reader = get_video_reader(video=video)
-    return sum([1 for _ in reader.iter_data()])
-
-def get_frames_from_video(video:bytes, stop:int,*,step:int=1) -> list[np.ndarray]:
-    reader = get_video_reader(video=video)
-    return [reader.get_data(i) for i in range(0,stop,step)]
-
-def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
-    total_frames = get_frames_count(video=video)
+async def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
+    job = get_frames_count.delay(video=video)
+    while not job.ready(): await asyncio.sleep(1)
+    total_frames = job.get()
     if total_frames < num_frames: total_frames = num_frames
     if not(total_frames): return []
     step = total_frames // num_frames
-    frames = get_frames_from_video(video=video, stop=total_frames, step=step)
+    job = get_frames_from_video.delay(video=video, stop=total_frames, step=step)
+    while not job.ready(): await asyncio.sleep(1)
+    frames = job.get()
     return frames[0:num_frames]
 
 async def get_file_bytes(file_id:str) -> bytes | None:
@@ -194,7 +188,7 @@ async def processing_photo(file_bytes: bytes) -> bool:
 
 async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
     logger.debug(f'Start processing video')
-    images = [normalize_image(i) for i in get_main_frames_from_video(video=file_bytes)]
+    images = [normalize_image(i) for i in await get_main_frames_from_video(video=file_bytes)]
     if not(images): return False
     spam_images = [image for i,image in zip(_processing_images(images),images) if i]
     spam_images_count = len(spam_images)
