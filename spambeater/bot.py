@@ -210,25 +210,17 @@ async def processing_spam_message(message: Message) -> None:
     logger.info(msg=msg)
 
 
-@bot.on_callback_query()
-async def callback_query(_: Client, query: CallbackQuery) -> None:
-    message = query.message
-    if query.data == "spam":
-        await admin_mark_message_as_spam(message=message, delete=True)
-    elif query.data == "ham":
-        await admin_mark_message_as_ham(message=message, delete=True)
-    elif query.data == "ignore":
-        await bot.delete_messages(
-            chat_id = message.chat.id,
-            message_ids=[message.id,],
-        )
-
-@bot.on_message()
-@bot.on_edited_message()
-async def processing_message(_: Client, message: Message) -> None:
-    user_id = message.from_user.id
+async def start_command_handler(message: Message) -> None:
+    text = message.text
     chat_id = message.chat.id
-    print()
+    user_id = message.from_user.id
+    user = message.from_user.first_name
+    if not(text and text.lower() == '/start'): return
+    await message.reply_text(f"Hi, {user}!")
+    logger.debug(f'Processing start command for User({user_id}) in Chat({chat_id})')
+
+async def antispam_handler(message: Message) -> None:
+    user_id, chat_id = message.from_user.id, message.chat.id
     logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
     # skip processing
     if not(is_chat_for_processing(chat_id)): return
@@ -246,7 +238,28 @@ async def processing_message(_: Client, message: Message) -> None:
     elif media_file.fclass == FileClass.VIDEO:
         spam = await processing_video(file_bytes=file_bytes)
     if spam: await processing_spam_message(message=message)
-    
+
+
+@bot.on_callback_query()
+async def callback_query(_: Client, query: CallbackQuery) -> None:
+    message = query.message
+    if query.data == "spam":
+        await admin_mark_message_as_spam(message=message, delete=True)
+    elif query.data == "ham":
+        await admin_mark_message_as_ham(message=message, delete=True)
+    elif query.data == "ignore":
+        await bot.delete_messages(
+            chat_id = message.chat.id,
+            message_ids=[message.id,],
+        )
+
+@bot.on_message()
+@bot.on_edited_message()
+async def processing_message(_: Client, message: Message) -> None:
+    print()
+    await start_command_handler(message=message)
+    await antispam_handler(message=message)  
+   
    
 def main():
     try:
