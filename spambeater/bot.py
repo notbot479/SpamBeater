@@ -3,7 +3,7 @@ from pyrogram.types import CallbackQuery, Message
 from pyrogram.client import Client
 import uvloop
 
-import imageio.v3 as iio
+import imageio.v2 as iio
 import numpy as np
 import traceback
 
@@ -97,21 +97,24 @@ async def bot_copy_message_to_admin_chat(message: Message, **kwargs) -> None:
         **kwargs,
     )
 
-def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
-    frames = get_frames_from_video(video=video)
-    if not(frames): return []
-    total_frames = len(frames)
-    if total_frames < num_frames: return frames
-    frame_delta = total_frames // num_frames
-    main_frames = [frames[i] for i in range(0, total_frames, frame_delta)]
-    return main_frames[0:num_frames]
+def get_video_reader(video:bytes):
+    return iio.get_reader(video, format='mp4') #pyright: ignore
 
-def get_frames_from_video(video:bytes) -> list[np.ndarray]:
-    try:
-        return list(iio.imread(video, plugin="pyav"))
-    except Exception as e:
-        logger.critical(e)
-        return []
+def get_frames_count(video:bytes) -> int:
+    reader = get_video_reader(video=video)
+    return sum([1 for _ in reader.iter_data()])
+
+def get_frames_from_video(video:bytes, stop:int,*,step:int=1) -> list[np.ndarray]:
+    reader = get_video_reader(video=video)
+    return [reader.get_data(i) for i in range(0,stop,step)]
+
+def get_main_frames_from_video(video: bytes, num_frames=32) -> list[np.ndarray]:
+    total_frames = get_frames_count(video=video)
+    if total_frames < num_frames: total_frames = num_frames
+    if not(total_frames): return []
+    step = total_frames // num_frames
+    frames = get_frames_from_video(video=video, stop=total_frames, step=step)
+    return frames[0:num_frames]
 
 async def get_file_bytes(file_id:str) -> bytes | None:
     try:
@@ -221,10 +224,10 @@ async def start_command_handler(message: Message) -> None:
 
 async def antispam_handler(message: Message) -> None:
     user_id, chat_id = message.from_user.id, message.chat.id
-    logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
     # skip processing
     if not(is_chat_for_processing(chat_id)): return
     # processing message
+    logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
     spam = False
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
@@ -256,7 +259,6 @@ async def callback_query(_: Client, query: CallbackQuery) -> None:
 @bot.on_message()
 @bot.on_edited_message()
 async def processing_message(_: Client, message: Message) -> None:
-    print()
     await start_command_handler(message=message)
     await antispam_handler(message=message)  
    
