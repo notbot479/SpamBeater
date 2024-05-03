@@ -41,9 +41,9 @@ async def save_message_data(message: Message, category: Category) -> None:
     path = SaveManager.get_save_media_path(filename=filename,category=category)
     if not(path): return
     file_bytes = await get_file_bytes(file_id=media_file.fid)
-    async with aiofiles.open(path, 'wb') as file: await file.write(file_bytes)
-
-    with open(path, 'wb') as file: file.write(file_bytes)
+    if not(file_bytes): return
+    async with aiofiles.open(path, 'wb') as file: 
+        await file.write(file_bytes)
 
 def _processing_images(images: list[np.ndarray]) -> list[bool]:
     spam = image_predict_model.predict_spam(images=images)
