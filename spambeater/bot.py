@@ -5,7 +5,6 @@ import uvloop
 
 import numpy as np
 import traceback
-import aiofiles
 import asyncio
 
 from normalization.image import normalize_image
@@ -35,17 +34,18 @@ async def save_message_data(message: Message, category: Category) -> None:
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
     # save text and media
-    if text: SaveManager.save_text(text=text, category=category)
+    if text: await SaveManager.save_text(text=text, category=category)
     if not(media_file): return
     filename = f'{media_file.fid}.{media_file.ext}'
-    path = SaveManager.get_save_media_path(filename=filename,category=category)
-    if not(path): return
     file_bytes = await get_file_bytes(file_id=media_file.fid)
     if not(file_bytes): return
-    async with aiofiles.open(path, 'wb') as file: 
-        await file.write(file_bytes)
+    await SaveManager.save_media(
+        file_bytes=file_bytes, 
+        filename=filename, 
+        category=category,
+    )
 
-def _processing_images(images: list[np.ndarray]) -> list[bool]:
+def predict_images_spam(images: list[np.ndarray]) -> list[bool]:
     spam = image_predict_model.predict_spam(images=images)
     return spam
 
@@ -184,7 +184,7 @@ async def processing_text(text:str, spam_proba:float=0.5) -> bool:
 async def processing_photo(file_bytes: bytes) -> bool:
     logger.debug(f'Start processing photo')
     image = normalize_image(file_bytes)
-    spam = _processing_images(images=[image,])
+    spam = predict_images_spam(images=[image,])
     spam = spam[0] if spam else False
     logger.debug(f'Image shape: {image.shape}, spam: {spam}') 
     return spam
@@ -193,7 +193,7 @@ async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
     logger.debug(f'Start processing video')
     images = [normalize_image(i) for i in await get_main_frames_from_video(video=file_bytes)]
     if not(images): return False
-    spam_images = [image for i,image in zip(_processing_images(images),images) if i]
+    spam_images = [image for i,image in zip(predict_images_spam(images),images) if i]
     spam_images_count = len(spam_images)
     spam = spam_images_count > len(images) * spam_proba
     msg = f'Video frames: {len(images)}, spam_count: {spam_images_count}, spam: {spam}'
