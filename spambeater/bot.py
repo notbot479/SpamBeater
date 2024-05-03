@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from pyrogram.types import CallbackQuery, Message
+from pyrogram.enums import ChatMemberStatus
 from pyrogram.client import Client
+from pyrogram import filters
 import uvloop
 
 import numpy as np
@@ -29,6 +31,36 @@ text_predict_model = TextPredictModel()
 image_predict_model = ImagePredictModel()
 
 
+def is_command(message: Message) -> bool:
+    text = message.text
+    return text.startswith('/')
+
+async def is_chat_admin(user_id:int, chat_id:int) -> bool:
+    _admins = (
+        ChatMemberStatus.OWNER,
+        ChatMemberStatus.ADMINISTRATOR,
+    )
+    try:
+        chat_member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        status = chat_member.status in _admins
+        return status
+    except:
+        return False
+
+async def _admins_only(_, __, message: Message) -> bool: #pyright: ignore
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    message_id = message.id
+    admin = await is_chat_admin(user_id=user_id,chat_id=chat_id)
+    if admin: return True
+    # delete message for not admins
+    await bot.delete_messages(
+        chat_id=chat_id,
+        message_ids=[message_id,],
+    )
+    return False
+admins_only = filters.create(_admins_only, 'AdminsOnly')
+
 async def save_message_data(message: Message, category: Category) -> None:
     logger.debug(f'Processing save message data, category: {category}')
     text = get_effective_normalized_text(message=message)
@@ -48,14 +80,6 @@ async def save_message_data(message: Message, category: Category) -> None:
 def predict_images_spam(images: list[np.ndarray]) -> list[bool]:
     spam = image_predict_model.predict_spam(images=images)
     return spam
-
-async def is_chat_admin(user_id:int, chat_id:int) -> bool:
-    try:
-        chat_member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
-        status = chat_member.status in ("administrator","creator")
-        return status
-    except:
-        return False
 
 def is_chat_for_processing(chat_id:int) -> bool:
     chats = list(BOT_ADMIN_CHATS.keys())
@@ -214,7 +238,16 @@ async def processing_spam_message(message: Message) -> None:
     logger.info(msg=msg)
 
 
-async def start_command_handler(message: Message) -> None:
+@bot.on_message(filters.command("spam") & admins_only)
+async def spam_command_handler(_: Client, message: Message) -> None:
+    print('Spam')
+
+@bot.on_message(filters.command("ham") & admins_only)
+async def ham_command_handler(_: Client, message: Message) -> None:
+    print('Ham')
+
+@bot.on_message(filters.command("start"))
+async def start_command_handler(_: Client, message: Message) -> None:
     text = message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -223,10 +256,27 @@ async def start_command_handler(message: Message) -> None:
     await message.reply_text(f"Hi, {user}!")
     logger.debug(f'Processing start command for User({user_id}) in Chat({chat_id})')
 
-async def antispam_handler(message: Message) -> None:
+@bot.on_callback_query()
+async def callback_query(_: Client, query: CallbackQuery) -> None:
+    message = query.message
+    if query.data == "spam":
+        await admin_mark_message_as_spam(message=message, delete=True)
+    elif query.data == "ham":
+        await admin_mark_message_as_ham(message=message, delete=True)
+    elif query.data == "ignore":
+        await bot.delete_messages(
+            chat_id = message.chat.id,
+            message_ids=[message.id,],
+        )
+
+@bot.on_message()
+@bot.on_edited_message()
+async def antispam_handler(_: Client, message: Message) -> None:
     user_id, chat_id = message.from_user.id, message.chat.id
     # skip processing
+    if is_command(message=message): return
     if not(is_chat_for_processing(chat_id)): return
+    #if is_chat_admin(user_id=user_id, chat_id=chat_id): return
     # processing message
     logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
     spam = False
@@ -244,26 +294,6 @@ async def antispam_handler(message: Message) -> None:
     if spam: await processing_spam_message(message=message)
 
 
-@bot.on_callback_query()
-async def callback_query(_: Client, query: CallbackQuery) -> None:
-    message = query.message
-    if query.data == "spam":
-        await admin_mark_message_as_spam(message=message, delete=True)
-    elif query.data == "ham":
-        await admin_mark_message_as_ham(message=message, delete=True)
-    elif query.data == "ignore":
-        await bot.delete_messages(
-            chat_id = message.chat.id,
-            message_ids=[message.id,],
-        )
-
-@bot.on_message()
-@bot.on_edited_message()
-async def processing_message(_: Client, message: Message) -> None:
-    await start_command_handler(message=message)
-    await antispam_handler(message=message)  
-   
-   
 def main():
     try:
         mode = 'debug' if BOT_DEBUG_MODE else 'deploy'
