@@ -122,8 +122,12 @@ async def get_file_bytes(file_id:str) -> bytes | None:
 def get_media_file(message: Message) -> MediaFile | None:
     photo = message.photo
     video = message.video
-    document = message.document
-    if photo: 
+    document = (
+        message.document or 
+        message.animation or 
+        message.sticker
+    )
+    if photo:
         media = MediaFile(
             fclass=FileClass.PHOTO, 
             fid=photo.file_id,

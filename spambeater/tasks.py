@@ -26,5 +26,5 @@ def get_frames_count(video:bytes) -> int:
 @app.task
 def get_frames_from_video(video:bytes, stop:int,*,step:int=1) -> list[np.ndarray]:
     reader = get_video_reader(video=video)
-    frames = [reader.get_data(i) for i in range(0,stop,step)]
+    frames = [reader.get_data(min(i,stop)) for i in range(0,stop,step)]
     return frames #pyright: ignore

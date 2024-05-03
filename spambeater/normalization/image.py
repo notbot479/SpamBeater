@@ -15,6 +15,7 @@ def normalize_image(
     img = img.resize(target_size)
     if show: img.show()
     image_array = np.array(img).astype(np.uint8)
+    image_array = image_array[:, :, :3] # drop alpha
     return image_array
 
 
