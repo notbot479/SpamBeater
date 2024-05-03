@@ -145,6 +145,7 @@ def get_media_file(message: Message) -> MediaFile | None:
             fid=document.file_id,
             ext=ext,
         )
+        return media
     elif mime_head == 'video': 
         media = MediaFile(
             fclass=FileClass.VIDEO, 
