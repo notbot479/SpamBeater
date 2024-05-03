@@ -33,6 +33,7 @@ image_predict_model = ImagePredictModel()
 
 def is_command(message: Message) -> bool:
     text = message.text
+    if not(text): return False
     return text.startswith('/')
 
 async def is_chat_admin(user_id:int, chat_id:int) -> bool:
@@ -237,22 +238,63 @@ async def processing_spam_message(message: Message) -> None:
     msg = f"[Bot] Delete Message({message_id}) from User({user_id}) in Chat({chat_id})"
     logger.info(msg=msg)
 
+async def send_no_target_warn_message(message: Message) -> None:
+    text = "Please select target by reply user message"
+    await message.reply_text(text=text)
+
+def get_target_message(message: Message) -> Message | None:
+    target_message = message.reply_to_message
+    if not(target_message): return None
+    is_reply = message.from_user != target_message.from_user
+    return target_message if is_reply else None
+
 
 @bot.on_message(filters.command("spam") & admins_only)
-async def spam_command_handler(_: Client, message: Message) -> None:
-    print('Spam')
+async def spam_command_handler(
+    _: Client, 
+    message: Message, 
+    ban_user:bool = False,
+    *,
+    delete_message: bool = True,
+) -> None:
+    target_message = get_target_message(message=message)
+    if not(target_message): 
+        await send_no_target_warn_message(message=message)
+        return
+    await admin_mark_message_as_spam(target_message, delete=delete_message)
+    # delete admin command
+    await bot.delete_messages(
+        chat_id=message.chat.id,
+        message_ids=[message.id,],
+    )
+    if not(ban_user): return
+    await bot.ban_chat_member(
+        chat_id=target_message.chat.id,
+        user_id=target_message.from_user.id,
+    )
 
 @bot.on_message(filters.command("ham") & admins_only)
-async def ham_command_handler(_: Client, message: Message) -> None:
-    print('Ham')
+async def ham_command_handler(
+    _: Client, 
+    message: Message, 
+    delete_message:bool=False,
+) -> None:
+    target_message = get_target_message(message=message)
+    if not(target_message): 
+        await send_no_target_warn_message(message=message)
+        return
+    await admin_mark_message_as_ham(target_message, delete=delete_message)
+    # delete admin command
+    await bot.delete_messages(
+        chat_id=message.chat.id,
+        message_ids=[message.id,],
+    )
 
 @bot.on_message(filters.command("start"))
 async def start_command_handler(_: Client, message: Message) -> None:
-    text = message.text
     chat_id = message.chat.id
     user_id = message.from_user.id
     user = message.from_user.first_name
-    if not(text and text.lower() == '/start'): return
     await message.reply_text(f"Hi, {user}!")
     logger.debug(f'Processing start command for User({user_id}) in Chat({chat_id})')
 
