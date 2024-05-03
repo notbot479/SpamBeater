@@ -7,18 +7,18 @@ from logger import logger
 
 
 class ImagePredictModel(PredictModelBase):
-    _class_names = ['ads','meat','notspam']
-    _notspam_class_name = 'notspam'
+    _class_names = ['ads','meat','ham']
+    _ham_class_name = 'ham'
 
     def _get_class_name(self, inx:int) -> str:
         try:
             name = self._class_names[inx]
             return name
         except:
-            return self._notspam_class_name
+            return self._ham_class_name
 
     def is_spam_class(self, name: str) -> bool:
-        status = not(name == self._notspam_class_name)
+        status = not(name == self._ham_class_name)
         return status
 
     def __init__(self, model_dir: str | None = None) -> None:
