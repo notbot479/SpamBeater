@@ -29,6 +29,7 @@ bot = Client(
 )
 text_predict_model = TextPredictModel()
 
+
 def get_top_class_name(spam:list[Spam]) -> str | None:
     if not(spam): return None
     class_counts = Counter(s.cls for s in spam)
@@ -69,8 +70,12 @@ async def _admins_only(_, __, message: Message) -> bool: #pyright: ignore
     return False
 admins_only = filters.create(_admins_only, 'AdminsOnly')
 
-async def save_message_data(message: Message, category: Category) -> None:
-    logger.debug(f'Processing save message data, category: {category}')
+async def save_message_data(
+    message: Message, 
+    category: Category, 
+    message_class: str | None = None,
+) -> None:
+    logger.debug(f'Save message data, category: {category}, class: {message_class}')
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
     # save text and media
@@ -83,34 +88,43 @@ async def save_message_data(message: Message, category: Category) -> None:
         file_bytes=file_bytes, 
         filename=filename, 
         category=category,
+        message_class=message_class,
     )
 
 def is_chat_for_processing(chat_id:int) -> bool:
     chats = list(BOT_ADMIN_CHATS.keys())
     return chat_id in chats
 
-async def admin_mark_message_as_spam(message: Message, delete: bool = False) -> None:
+async def admin_mark_message_as_spam(
+    message: Message, 
+    delete: bool = False, 
+    spam_class:str | None = None,
+) -> None:
     chat_id = message.chat.id
     message_ids = [message.id,]
-    await save_message_data(message=message, category='spam')
+    await save_message_data(message=message, category='spam',message_class=spam_class)
     # delete message after processing
     if not(delete): return
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
 
-async def admin_mark_message_as_ham(message: Message, delete: bool = False) -> None:
+async def admin_mark_message_as_ham(
+    message: Message, 
+    delete: bool = False, 
+    spam_class: str | None = None,
+) -> None:
     chat_id = message.chat.id
     message_ids = [message.id,]
-    await save_message_data(message=message, category='ham')
+    await save_message_data(message=message, category='ham',message_class=spam_class)
     # delete message after processing
     if not(delete): return
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
 
-async def bot_ask4spam_in_admin_chat(message: Message) -> None:
-    keyboard = ASK_FOR_SPAM_KEYBOARD
-    params = {
-        'reply_markup': keyboard,
-    }
-    await bot_copy_message_to_admin_chat(message=message, **params)
+async def bot_ask4spam_in_admin_chat(
+    message: Message, 
+    spam_class:str | None = None,
+) -> None:
+    keyboard = get_ask4spam_keyboard(spam_class=spam_class)
+    await bot_copy_message_to_admin_chat(message=message, reply_markup=keyboard)
 
 def get_admin_chat(chat_id:int) -> int | None:
     admin_chat_id = BOT_ADMIN_CHATS.get(chat_id)
@@ -240,11 +254,14 @@ async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> Spam:
     logger.info(msg=msg)
     return spam
 
-async def processing_spam_message(message: Message) -> None:
+async def processing_spam_message(
+    message: Message, 
+    spam_class:str | None = None,
+) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
     message_id = message.id
-    await bot_ask4spam_in_admin_chat(message=message)
+    await bot_ask4spam_in_admin_chat(message=message, spam_class=spam_class)
     await bot_delete_post_message(chat_id=chat_id, message_id=message_id)
     msg = f"[Bot] Delete Message({message_id}) from User({user_id}) in Chat({chat_id})"
     logger.info(msg=msg)
@@ -310,12 +327,23 @@ async def start_command_handler(_: Client, message: Message) -> None:
     logger.debug(f'Processing start command for User({user_id}) in Chat({chat_id})')
 
 @bot.on_callback_query()
-async def callback_query(_: Client, query: CallbackQuery) -> None:
+async def callback_query(_: Client, query: CallbackQuery, *, sep='-') -> None:
     message = query.message
-    if query.data == "spam":
-        await admin_mark_message_as_spam(message=message, delete=True)
-    elif query.data == "ham":
-        await admin_mark_message_as_ham(message=message, delete=True)
+    query_text = str(query.data) 
+    if not(message and query_text): return
+    spam_class = query_text.split(sep)[-1]
+    if query_text.startswith("query-spam"): 
+        await admin_mark_message_as_spam(
+            message=message, 
+            delete=True, 
+            spam_class=spam_class,
+        )
+    if query_text.startswith("query-ham"): 
+        await admin_mark_message_as_ham(
+            message=message, 
+            delete=True,
+            spam_class=spam_class,
+            )
     elif query.data == "ignore":
         await bot.delete_messages(
             chat_id = message.chat.id,
@@ -332,11 +360,11 @@ async def antispam_handler(_: Client, message: Message) -> None:
     #if is_chat_admin(user_id=user_id, chat_id=chat_id): return
     # processing message
     logger.debug(f'Start processing message: User({user_id}) in Chat({chat_id})')
-    spam = False
+    spam = Spam(False)
     text = get_effective_normalized_text(message=message)
     media_file = get_media_file(message=message)
     if text: spam = await processing_text(text=text)
-    if spam: await processing_spam_message(message=message)
+    if spam: await processing_spam_message(message=message, spam_class=spam.cls)
     if not(media_file) or spam: return
     file_bytes = await get_file_bytes(file_id=media_file.fid)
     if not(file_bytes): return
@@ -344,7 +372,7 @@ async def antispam_handler(_: Client, message: Message) -> None:
         spam = await processing_photo(file_bytes=file_bytes)
     elif media_file.fclass == FileClass.VIDEO:
         spam = await processing_video(file_bytes=file_bytes)
-    if spam: await processing_spam_message(message=message)
+    if spam: await processing_spam_message(message=message, spam_class=spam.cls)
 
 
 def main():

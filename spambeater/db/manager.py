@@ -26,15 +26,27 @@ class SaveManager:
         file_bytes: bytes, 
         filename: str, 
         category: Category,
+        message_class: str | None = None,
     ) -> None:
-        path = cls._get_save_media_path(filename=filename, category=category)
+        path = cls._get_save_media_path(
+            filename=filename, 
+            category=category,
+            message_class=message_class,
+        )
         async with aiofiles.open(path, 'wb') as file: 
             await file.write(file_bytes)
 
 
     @classmethod
-    def _get_save_media_path(cls, filename:str, category: Category) -> str:
-        dir_path = cls._spam_dir if category == 'spam' else cls._ham_dir
-        os.makedirs(dir_path, exist_ok=True)
-        path = os.path.join(dir_path, filename)
+    def _get_save_media_path(
+        cls, 
+        filename:str, 
+        category: Category,
+        message_class: str | None = None,
+    ) -> str:
+        path = cls._spam_dir if category == 'spam' else cls._ham_dir
+        if message_class: path = os.path.join(path, message_class)
+        os.makedirs(path, exist_ok=True)
+        # create file path
+        path = os.path.join(path, filename)
         return path

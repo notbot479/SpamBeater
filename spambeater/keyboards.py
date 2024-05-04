@@ -1,8 +1,10 @@
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
-_a = InlineKeyboardButton("❌ Spam", callback_data="spam")
-_b = InlineKeyboardButton("✅ Ham", callback_data="ham")
-_c = InlineKeyboardButton("🗑 Ignore", callback_data="ignore")
-_buttons = [[_a,_b],[_c,]]
-ASK_FOR_SPAM_KEYBOARD = InlineKeyboardMarkup(_buttons)
+def get_ask4spam_keyboard(spam_class:str | None) -> InlineKeyboardMarkup:
+    if not(spam_class): spam_class = 'none'
+    _a = InlineKeyboardButton("❌ Spam", callback_data=f"query-spam-{spam_class}")
+    _b = InlineKeyboardButton("✅ Ham", callback_data=f"query-ham-{spam_class}")
+    _c = InlineKeyboardButton(f"🗑 Ignore - {spam_class}", callback_data="ignore")
+    _buttons = [[_a,_b],[_c,]]
+    return InlineKeyboardMarkup(_buttons)
