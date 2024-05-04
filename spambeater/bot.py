@@ -5,6 +5,7 @@ from pyrogram.client import Client
 from pyrogram import filters
 import uvloop
 
+from collections import Counter
 import numpy as np
 import traceback
 import asyncio
@@ -30,6 +31,15 @@ bot = Client(
 text_predict_model = TextPredictModel()
 image_predict_model = ImagePredictModel()
 
+
+def get_top_class_name(spam:list[Spam]) -> str | None:
+    if not(spam): return None
+    class_counts = Counter(s.cls for s in spam)
+    spam_counts = Counter(s.cls for s in spam if s.status)
+    class_top = class_counts.most_common(1)
+    spam_top = spam_counts.most_common(1)
+    top = spam_top if spam_top else class_top
+    return top[0][0]
 
 def is_command(message: Message) -> bool:
     text = message.text
@@ -78,7 +88,7 @@ async def save_message_data(message: Message, category: Category) -> None:
         category=category,
     )
 
-def predict_images_spam(images: list[np.ndarray]) -> list[bool]:
+def predict_images_spam(images: list[np.ndarray]) -> list[Spam]:
     spam = image_predict_model.predict_spam(images=images)
     return spam
 
@@ -203,30 +213,34 @@ async def bot_delete_post_message(chat_id:int, message_id: int) -> None:
     await bot.delete_messages(chat_id=chat_id, message_ids=message_ids)
 
 
-async def processing_text(text:str, spam_proba:float=0.5) -> bool:
-    if not(text): return False
+async def processing_text(text:str, spam_proba:float=0.5) -> Spam:
+    if not(text): return Spam(False)
     proba = text_predict_model.predict_spam_proba(text=text)
     logger.debug(f"Text({text}) predicted spam proba: {proba}")
-    spam = proba > spam_proba
-    return spam
+    status = proba > spam_proba
+    return Spam(status)
 
-async def processing_photo(file_bytes: bytes) -> bool:
+async def processing_photo(file_bytes: bytes) -> Spam:
     logger.debug(f'Start processing photo')
     image = normalize_image(file_bytes)
     spam = predict_images_spam(images=[image,])
-    spam = spam[0] if spam else False
-    logger.debug(f'Image shape: {image.shape}, spam: {spam}') 
+    spam = spam[0] if spam else Spam(False)
+    logger.info(f'Image shape: {image.shape}, {spam}') 
     return spam
 
-async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> bool:
+async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> Spam:
     logger.debug(f'Start processing video')
     images = [normalize_image(i) for i in await get_main_frames_from_video(video=file_bytes)]
-    if not(images): return False
-    spam_images = [image for i,image in zip(predict_images_spam(images),images) if i]
+    if not(images): return Spam(False)
+    predict = predict_images_spam(images)
+    if not(predict): return Spam(False)
+    spam_images = [image for i,image in zip(predict,images) if i]
     spam_images_count = len(spam_images)
-    spam = spam_images_count > len(images) * spam_proba
-    msg = f'Video frames: {len(images)}, spam_count: {spam_images_count}, spam: {spam}'
-    logger.debug(msg=msg)
+    status = spam_images_count >= int(len(images) * spam_proba)
+    cls = get_top_class_name(predict)
+    spam = Spam(status=status, cls=cls)
+    msg = f'Video frames: {len(images)}, spam_count: {spam_images_count}, {spam}'
+    logger.info(msg=msg)
     return spam
 
 async def processing_spam_message(message: Message) -> None:

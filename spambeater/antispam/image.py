@@ -3,6 +3,7 @@ import keras
 import os
 
 from .predict_model import PredictModelBase
+from bot_types import Spam
 from logger import logger
 
 
@@ -27,14 +28,14 @@ class ImagePredictModel(PredictModelBase):
         self.model = None
         self.load()
 
-    def predict_spam(self, images: list[np.ndarray]) -> list[bool]:
+    def predict_spam(self, images: list[np.ndarray]) -> list[Spam]:
         if not(self.model): return []
         X = np.array(images)
         y = self.model.predict(X, verbose=0) #pyright: ignore
         predict = np.argmax(y, axis=1)
         class_names = [self._get_class_name(int(i)) for i in predict]
         for n,p in zip(class_names, y): logger.debug(f'{n} {p}') 
-        spam = [self.is_spam_class(i) for i in class_names]
+        spam = [Spam(self.is_spam_class(i), i) for i in class_names]
         return spam
     
     def load(self) -> None: 
