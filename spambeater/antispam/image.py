@@ -34,7 +34,6 @@ class ImagePredictModel(PredictModelBase):
         y = self.model.predict(X, verbose=0) #pyright: ignore
         predict = np.argmax(y, axis=1)
         class_names = [self._get_class_name(int(i)) for i in predict]
-        for n,p in zip(class_names, y): logger.debug(f'{n} {p}') 
         spam = [Spam(self.is_spam_class(i), i) for i in class_names]
         return spam
     

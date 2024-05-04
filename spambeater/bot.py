@@ -12,7 +12,6 @@ import asyncio
 
 from normalization.image import normalize_image
 from db.manager import Category, SaveManager
-from antispam.image import ImagePredictModel
 from antispam.text import TextPredictModel
 from logger import logger
 from bot_types import *
@@ -29,8 +28,6 @@ bot = Client(
     bot_token=BOT_TELEGRAM_BOT_TOKEN,
 )
 text_predict_model = TextPredictModel()
-image_predict_model = ImagePredictModel()
-
 
 def get_top_class_name(spam:list[Spam]) -> str | None:
     if not(spam): return None
@@ -87,10 +84,6 @@ async def save_message_data(message: Message, category: Category) -> None:
         filename=filename, 
         category=category,
     )
-
-def predict_images_spam(images: list[np.ndarray]) -> list[Spam]:
-    spam = image_predict_model.predict_spam(images=images)
-    return spam
 
 def is_chat_for_processing(chat_id:int) -> bool:
     chats = list(BOT_ADMIN_CHATS.keys())
@@ -223,7 +216,9 @@ async def processing_text(text:str, spam_proba:float=0.5) -> Spam:
 async def processing_photo(file_bytes: bytes) -> Spam:
     logger.debug(f'Start processing photo')
     image = normalize_image(file_bytes)
-    spam = predict_images_spam(images=[image,])
+    job = tasks.predict_images_spam.delay(images=[image,])
+    while not job.ready(): await asyncio.sleep(0.5)
+    spam = job.get()
     spam = spam[0] if spam else Spam(False)
     logger.info(f'Image shape: {image.shape}, {spam}') 
     return spam
@@ -232,7 +227,9 @@ async def processing_video(file_bytes: bytes, spam_proba:float=0.2) -> Spam:
     logger.debug(f'Start processing video')
     images = [normalize_image(i) for i in await get_main_frames_from_video(video=file_bytes)]
     if not(images): return Spam(False)
-    predict = predict_images_spam(images)
+    job = tasks.predict_images_spam.delay(images=images)
+    while not job.ready(): await asyncio.sleep(1)
+    predict = job.get()
     if not(predict): return Spam(False)
     spam_images = [image for i,image in zip(predict,images) if i]
     spam_images_count = len(spam_images)
