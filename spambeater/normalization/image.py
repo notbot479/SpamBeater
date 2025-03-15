@@ -5,17 +5,20 @@ import numpy as np
 
 
 def normalize_image(
-    image: bytes | np.ndarray, 
+    image: bytes | np.ndarray,
     target_size=(224, 224),
-    show:bool = False,
+    show: bool = False,
 ) -> np.ndarray:
-    if isinstance(image, bytes): img = Image.open(BytesIO(image))
-    else: img = Image.fromarray(image)
+    if isinstance(image, bytes):
+        img = Image.open(BytesIO(image))
+    else:
+        img = Image.fromarray(image)
     img = _crop_center_square(img=img)
     img = img.resize(target_size)
-    if show: img.show()
+    if show:
+        img.show()
     image_array = np.array(img).astype(np.uint8)
-    image_array = image_array[:, :, :3] # drop alpha
+    image_array = image_array[:, :, :3]  # drop alpha
     return image_array
 
 

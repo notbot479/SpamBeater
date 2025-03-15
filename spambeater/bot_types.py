@@ -10,9 +10,11 @@ class Spam:
     def __bool__(self) -> bool:
         return bool(self.status)
 
+
 class FileClass(Enum):
     PHOTO = 1
     VIDEO = 2
+
 
 @dataclass
 class MediaFile:
