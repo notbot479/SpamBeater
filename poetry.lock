@@ -897,14 +897,14 @@ files = [
 
 [[package]]
 name = "keras"
-version = "3.3.3"
-description = "Multi-backend Keras."
+version = "3.9.0"
+description = "Multi-backend Keras"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "keras-3.3.3-py3-none-any.whl", hash = "sha256:260df9ef71c6b89eb6816ce1c60f139c38ccdddd16f24e7005d2be127cdef8e4"},
-    {file = "keras-3.3.3.tar.gz", hash = "sha256:f2fdffc8434fd77045cf8fb21816dbaa2308d5f76974ca924b2f60b40433b1a0"},
+    {file = "keras-3.9.0-py3-none-any.whl", hash = "sha256:71078e833994384f45d5ea192d18f0969a12bd2572a5d15968c755945ad91d1c"},
+    {file = "keras-3.9.0.tar.gz", hash = "sha256:b5bf04e7c64c3176eda5124d035005bb7a676fb505f42496c7b03a99d5683652"},
 ]
 
 [package.dependencies]
@@ -914,6 +914,7 @@ ml-dtypes = "*"
 namex = "*"
 numpy = "*"
 optree = "*"
+packaging = "*"
 rich = "*"
 
 [[package]]
@@ -2676,4 +2677,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "e5e97d0cfc8f643c631170e091191eca30d3b3e0e54db2c55f0172c3de9150ec"
+content-hash = "4ec274c6c3631afe402d35bdf9364eea9f13488010af0176ad30a0949529cbcf"
